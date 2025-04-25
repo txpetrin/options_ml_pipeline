@@ -1,0 +1,1 @@
+# Eventually: Use News API to get news articles for sentiment analysis
