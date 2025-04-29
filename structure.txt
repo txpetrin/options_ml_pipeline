@@ -1,38 +1,21 @@
-ml-options-pipeline/
-├── app/
-│   ├── __init__.py
-│   ├── main.py                   # Flask app (API endpoint)
-│   ├── routes.py                 # Prediction route
-│   └── utils.py                  # Input validation, response formatting
-
-├── model/
-│   ├── train.py                  # Initial model training
-│   ├── retrain.py                # Triggered via drift script
-│   ├── tf_model.py               # TensorFlow model architecture
-│   └── drift_check.py            # Rolling window performance monitor
-
-├── data/
-│   ├── ingest_polygon.py         # Calls Polygon API
-│   ├── ingest_news.py            # Pulls headlines from NewsAPI
-│   ├── sentiment_analysis.py     # BERT/VADER-based scoring
-│   ├── feature_engineering.py    # Merges + creates model features
-│   └── daily_run_pipeline.py     # End-to-end orchestration job
-
-├── mlflow/
-│   └── mlflow_config.yaml        # MLflow settings (optional)
-│
-├── docker/
-│   ├── Dockerfile                # Container image definition
-│   ├── docker-compose.yml        # Flask + MLflow + DB/Secrets
-│   └── .dockerignore
-
-├── config/
-│   ├── config.yaml               # API keys, model settings
-│   └── secrets.env               # .env-style secrets
-
-├── notebooks/
-│   └── EDA.ipynb                 # Exploratory data analysis
-
-├── requirements.txt              # Python deps
-├── README.md                     # Project overview
-└── .gitignore
+/project
+  ├── docker-compose.yml
+  ├── Dockerfile.train
+  ├── Dockerfile.retrain
+  ├── Dockerfile.serve
+  ├── requirements.txt
+  ├── models/
+  ├── data/
+  ├── mlruns/
+  ├── src/                   # <--- NEW: All core logic goes here
+  │    ├── __init__.py
+  │    ├── data_utils.py      # Data pulling, feature engineering
+  │    ├── model_utils.py     # LSTM model creation and compilation
+  │    ├── dataset_utils.py   # Create TensorFlow datasets
+  │    ├── training_pipeline.py # Full end-to-end pipeline for training
+  │    └── evaluation_utils.py  # Compare models, scoring functions
+  ├── train.py                # Thin script: just calls src/training_pipeline.py
+  ├── retrainer.py            # Thin script: calls training_pipeline + evaluation_utils
+  └── app/
+       ├── main.py            # Serving API
+       └── model_loader.py

@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  train:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.train
+    volumes:
+      - ./models:/app/models   # Your trained models
+    ports:
+      - "7000:7000"
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow_server:5000
+    depends_on:
+      - mlflow_server
+
+  mlflow_server:
+    image: ghcr.io/mlflow/mlflow:v2.12.1  # Latest stable MLflow version
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlflow_data:/mlflow/artifacts    # Models/artifacts storage
+    command: [
+      "mlflow", "server",
+      "--backend-store-uri", "sqlite:///mlflow/artifacts/mlflow.db",
+      "--default-artifact-root", "/mlflow/artifacts",
+      "--host", "0.0.0.0"
+    ]
+  
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.react
+    ports:
+      - "3000:3000"
+    depends_on:
+      - train
+    environment:
+      - CHOKIDAR_USEPOLLING=true  # fixes file watching issues on some OSes
+  
+  
+  

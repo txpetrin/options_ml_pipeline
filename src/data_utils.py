@@ -77,9 +77,9 @@ def generate_stock_price_prediction_dataset(
 
 
 # Full pipeline
-def create_stock_price_prediction_dataset(ticker, days_to_predict=5):
-    df = pull_stock_data(ticker, period='6mo', interval='1d')
-    vix_df = pull_vix_data(period='6mo', interval='1d')
+def create_stock_price_prediction_dataset(ticker, days_to_predict=5, period='6mo'):
+    df = pull_stock_data(ticker, period=period, interval='1d')
+    vix_df = pull_vix_data(period=period, interval='1d')
     df = calculate_realized_volatility(df)
 
     df.index = df.index.tz_localize(None)
@@ -94,68 +94,3 @@ def create_stock_price_prediction_dataset(ticker, days_to_predict=5):
     )
     return feature_df, label_series
 
-
-
-
-import tensorflow as tf
-
-def create_lstm_dataset(features_df, labels_array, batch_size=32, shuffle_buffer=1000):
-    """
-    Create a TensorFlow Dataset for LSTM input.
-    
-    Args:
-        features_df (pd.DataFrame): Feature dataframe (n_samples, n_features).
-        labels_array (np.ndarray): Label array (n_samples, 5).
-        batch_size (int): Batch size for training.
-        shuffle_buffer (int): Buffer size for shuffling.
-
-    Returns:
-        tf.data.Dataset: Dataset yielding (features, labels) tuples.
-    """
-    if len(features_df) != len(labels_array):
-        raise ValueError("Features and labels must have the same number of samples.")
-    
-    # Take list of non-numeric columns
-    non_numeric_columns = features_df.select_dtypes(exclude=[np.number]).columns.tolist()
-
-    # Drop non-numeric columns
-    features_df = features_df.drop(columns=non_numeric_columns)
-
-    features = features_df.to_numpy().astype('float32')
-    labels = labels_array.astype('float32')
-
-    dataset = tf.data.Dataset.from_tensor_slices((features, labels))
-    dataset = dataset.shuffle(buffer_size=shuffle_buffer)
-    dataset = dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
-
-    return dataset
-
-
-# Train LSTM Model:
-
-def create_lstm_model(input_shape, output_shape):
-    model = tf.keras.Sequential([
-        tf.keras.layers.LSTM(64, return_sequences=True, input_shape=input_shape),
-        tf.keras.layers.LSTM(32),
-        tf.keras.layers.Dense(64, activation='relu'),
-        tf.keras.layers.Dense(output_shape)
-    ])
-
-    model.compile(optimizer='adam', loss='mse')
-    return model
-
-def train_lstm_model(dataset, input_shape, output_shape, epochs=100):
-    model = create_lstm_model(input_shape, output_shape)
-    model.fit(dataset, epochs=epochs)
-    return model
-
-
-ticker = 'AAPL'
-features, labels = create_stock_price_prediction_dataset(ticker)
-dataset = create_lstm_dataset(features, labels)
-
-
-
-input_shape = (features.shape[1], 1)  # Number of features, 1 timestep
-output_shape = labels.shape[1]  # Number of days to predict
-lstm_model = train_lstm_model(dataset, input_shape, output_shape, epochs=120)
