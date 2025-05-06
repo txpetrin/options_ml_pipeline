@@ -1,42 +1,92 @@
 version: '3.8'
 
 services:
-  train:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.train
-    volumes:
-      - ./models:/app/models   # Your trained models
-    ports:
-      - "7000:7000"
-    environment:
-      - MLFLOW_TRACKING_URI=http://mlflow_server:5000
-    depends_on:
-      - mlflow_server
-
-  mlflow_server:
-    image: ghcr.io/mlflow/mlflow:v2.12.1  # Latest stable MLflow version
-    ports:
-      - "5000:5000"
-    volumes:
-      - ./mlflow_data:/mlflow/artifacts    # Models/artifacts storage
-    command: [
-      "mlflow", "server",
-      "--backend-store-uri", "sqlite:///mlflow/artifacts/mlflow.db",
-      "--default-artifact-root", "/mlflow/artifacts",
-      "--host", "0.0.0.0"
-    ]
-  
   frontend:
     build:
-      context: .
-      dockerfile: docker/Dockerfile.react
+      context: ./frontend
+      dockerfile: Dockerfile
     ports:
       - "3000:3000"
-    depends_on:
-      - train
+    # depends_on:
+    #  - train
     environment:
       - CHOKIDAR_USEPOLLING=true  # fixes file watching issues on some OSes
   
-  
-  
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: mlflow
+      POSTGRES_PASSWORD: mlflow
+      POSTGRES_DB: mlflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  mlflow:
+    image: mlflow/mlflow
+    depends_on:
+      - postgres
+      - minio
+    environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql://mlflow:mlflow@postgres/mlflow
+      MLFLOW_DEFAULT_ARTIFACT_ROOT: s3://mlflow/
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+    ports:
+      - "5000:5000"
+    command: mlflow server --backend-store-uri postgresql://mlflow:mlflow@postgres/mlflow --default-artifact-root s3://mlflow/ --host 0.0.0.0
+
+  minio-setup:
+    image: minio/mc
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until /usr/bin/mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 1; done &&
+      /usr/bin/mc mb local/mlflow || true &&
+      /usr/bin/mc policy set public local/mlflow
+      "
+
+  train:
+    build: 
+      context: ./train
+      dockerfile: Dockerfile
+    depends_on:
+      - mlflow
+      - minio-setup
+    environment:
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      GIT_PYTHON_REFRESH: quiet
+
+  predict:
+    build: 
+      context: ./predict
+      dockerfile: Dockerfile
+    depends_on:
+      train:
+        condition: service_completed_successfully
+    environment:
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      GIT_PYTHON_REFRESH: quiet
+
+volumes:
+  postgres_data:
+  minio_data:

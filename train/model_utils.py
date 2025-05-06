@@ -62,9 +62,5 @@ def train_lstm_model(dataset, input_shape, output_shape, epochs=100, ticker="AAP
 
     run_id = datetime.datetime.now(datetime.timezone.utc).strftime(f"{ticker}_%Y%m%dT%H%M%S")
 
-    os.makedirs(save_dir, exist_ok=True)
-    model_path = os.path.join(save_dir, f"{run_id}.h5")
-    model.save(model_path)
-
     # Return metadata
-    return run_id, model_path, final_loss
+    return run_id, model, final_loss
