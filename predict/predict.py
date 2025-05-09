@@ -7,10 +7,17 @@ def predict_stock_price():
     
     print("Starting prediction...")
 
-    ticker = "AAPL"
-    mlflow.set_tracking_uri("http://mlflow:5000")
+    try:
+        print("Setting MLflow tracking URI...")
+        mlflow.set_tracking_uri("http://mlflow:5000")
+        client = mlflow.tracking.MlflowClient()
+        print("Successfully connected to MLflow server.")
+    except ConnectionError as e:
+        print(f"Error connecting to MLflow server: {e}")
+        return
     
-    client = mlflow.tracking.MlflowClient()
+    ticker = "AAPL"
+
     experiment_name = f"{ticker}"
 
     experiment = client.get_experiment_by_name(experiment_name)
