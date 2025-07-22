@@ -62,7 +62,6 @@ def square():
     print(f"Processed: {number} -> {response['squared']}", flush=True)
     print(f"Iris Data : {response['predictions']}", flush=True)
     print(f"DataFrame : {response['dataframe']}", flush=True)
-    print(f"Forecast : {response['forecast']}", flush=True)
 
     return jsonify(response)
 
