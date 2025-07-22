@@ -1,6 +1,0 @@
-tensorflow==2.14.0
-pandas
-numpy<2
-yfinance
-flask
-mlflow

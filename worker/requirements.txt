@@ -1,0 +1,10 @@
+# TODO - Add version numbers after testing
+mlflow==2.19.0
+boto3
+psycopg2-binary
+pandas
+scikit-learn==1.5.2
+pika
+yfinance==0.2.56
+numpy==1.26.4
+pmdarima==2.0.4

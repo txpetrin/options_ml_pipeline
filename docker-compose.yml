@@ -1,92 +1,93 @@
-version: '3.8'
-
 services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  api:
+    build: ./api
+    ports:
+      - "4000:4000"
+    depends_on:
+      - rabbitmq
+
+  worker:
+    build: ./worker
+    depends_on:
+      - rabbitmq
+    environment:
+      AWS_ACCESS_KEY_ID: "mlflow"
+      AWS_SECRET_ACCESS_KEY: "mlflowpass"
+      MLFLOW_TRACKING_URI: "http://mlflow:5000"
+      MLFLOW_S3_ENDPOINT_URL: "http://minio:9000"
+      MLFLOW_S3_IGNORE_TLS: "true"
+
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    build: ./frontend
     ports:
       - "3000:3000"
-    # depends_on:
-    #  - train
-    environment:
-      - CHOKIDAR_USEPOLLING=true  # fixes file watching issues on some OSes
-  
-  postgres:
-    image: postgres:13
-    environment:
-      POSTGRES_USER: mlflow
-      POSTGRES_PASSWORD: mlflow
-      POSTGRES_DB: mlflow
+    depends_on:
+      - api
+
+
+# TODO : This needs to eventually get away from hardcoded port numbers
+  mlflow:
+    build: ./mlflow
     ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - "5000:5000"
+    environment:
+      MLFLOW_S3_ENDPOINT_URL: "http://minio:9000"
+      MLFLOW_S3_IGNORE_TLS: "true"
+      AWS_ACCESS_KEY_ID: "mlflow"
+      AWS_SECRET_ACCESS_KEY: "mlflowpass"
+    entrypoint: [
+      "mlflow", "server",
+      "--backend-store-uri", "postgresql+psycopg2://mlflow:mlflow@postgres/mlflow",
+      "--default-artifact-root", "s3://mlflow/",
+      "-h", "0.0.0.0",
+      "--port", "5000"
+    ]
+    depends_on:
+      - postgres
+      - minio-init
 
   minio:
-    image: minio/minio
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+    image: minio/minio:latest
     ports:
       - "9000:9000"
       - "9001:9001"
-    volumes:
-      - minio_data:/data
-
-  mlflow:
-    image: mlflow/mlflow
-    depends_on:
-      - postgres
-      - minio
     environment:
-      MLFLOW_BACKEND_STORE_URI: postgresql://mlflow:mlflow@postgres/mlflow
-      MLFLOW_DEFAULT_ARTIFACT_ROOT: s3://mlflow/
-      AWS_ACCESS_KEY_ID: minioadmin
-      AWS_SECRET_ACCESS_KEY: minioadmin
-      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
-    ports:
-      - "5000:5000"
-    command: mlflow server --backend-store-uri postgresql://mlflow:mlflow@postgres/mlflow --default-artifact-root s3://mlflow/ --host 0.0.0.0
+      MINIO_ROOT_USER: "mlflow"
+      MINIO_ROOT_PASSWORD: "mlflowpass"
+    volumes:
+      - "mlflow-minio:/data/minio"
+    command: server /data/minio --console-address ":9001"
 
-  minio-setup:
+  minio-init:
     image: minio/mc
     depends_on:
       - minio
     entrypoint: >
       /bin/sh -c "
-      until /usr/bin/mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 1; done &&
-      /usr/bin/mc mb local/mlflow || true &&
-      /usr/bin/mc policy set public local/mlflow
+      sleep 10 &&
+      mc alias set myminio http://minio:9000 mlflow mlflowpass &&
+      mc mb myminio/mlflow || true
       "
 
-  train:
-    build: 
-      context: ./train
-      dockerfile: Dockerfile
-    depends_on:
-      - mlflow
-      - minio-setup
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
     environment:
-      AWS_ACCESS_KEY_ID: minioadmin
-      AWS_SECRET_ACCESS_KEY: minioadmin
-      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
-      GIT_PYTHON_REFRESH: quiet
-
-  predict:
-    build: 
-      context: ./predict
-      dockerfile: Dockerfile
-    depends_on:
-      train:
-        condition: service_completed_successfully
-    environment:
-      AWS_ACCESS_KEY_ID: minioadmin
-      AWS_SECRET_ACCESS_KEY: minioadmin
-      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
-      GIT_PYTHON_REFRESH: quiet
+      POSTGRES_USER: "mlflow"
+      POSTGRES_PASSWORD: "mlflow"
+      POSTGRES_DB: "mlflow"
+    volumes:
+      - "mlflow-postgres:/var/lib/postgresql/data"
 
 volumes:
-  postgres_data:
-  minio_data:
+  mlflow-postgres:
+    driver: local
+  mlflow-minio:
+    driver: local
