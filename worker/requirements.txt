@@ -8,3 +8,4 @@ pika
 yfinance==0.2.56
 numpy==1.26.4
 pmdarima==2.0.4
+statsmodels==0.14.4
