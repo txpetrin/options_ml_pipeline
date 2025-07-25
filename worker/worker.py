@@ -65,43 +65,64 @@ def callback(ch, method, properties, body):
         print(f"HIT PREDICT", flush=True)
         print(f"Prediction: {y_pred}", flush=True)
 
-    experiment_name = "arima-forecasting"
-    mlflow.set_experiment(experiment_name)
-    with mlflow.start_run():
-        mlflow.autolog()
-        ### TODO : Import yfinance data and set up ARIMA model
-        yahoo_pull = yf.download("AAPL", start="2025-01-01", end="2025-02-01")
-        print(yahoo_pull.head(), flush=True)
-        print(yahoo_pull.columns, flush=True)
-        print(yahoo_pull[('Close', "AAPL")], flush=True)
-
-        if yahoo_pull.empty:
-            input_data = np.zeros(20)  # Default to zero if no data
-        else:
-            input_data = yahoo_pull[('Close', "AAPL")].values
-
-        print(f"DATA : {input_data}", flush=True)
 
 
 
-        model = sm.tsa.arima.model.ARIMA(input_data, order=(1,0,0))
-        model_fit = model.fit()
-        print(model_fit.summary(), flush=True)
 
-        n_periods = 5
-        forecast = model_fit.get_forecast(steps=n_periods)
+    # NOTE : SEE IF RUN NEEDS TO BE ENDED HERE
 
-        ci = forecast.conf_int()
-        avg_bounds = ci.mean(axis=1)
-        avg_series = pd.Series(avg_bounds)
 
-        print(avg_series, flush=True)
+    # TODO : Separate the independent models for building process
+    # TODO : Import yfinance data and set up ARIMA model
+
+    stocks = ["AAPL", "NVDA"]
+    yahoo_pull = yf.download(stocks, start="2025-01-01", end="2025-02-01")
+    print(yahoo_pull.head(), flush=True)
+    print(yahoo_pull.columns, flush=True)
+    print(yahoo_pull[('Close', "AAPL")], flush=True)
+
+    return_data = pd.DataFrame()
+
+    if yahoo_pull.empty:
+        return_data['DMMY'] = np.zeros(20)  # Default to zeroes if no data
+
+    else:
+        for stock in stocks:
+            return_data[stock] = yahoo_pull['Close'][stock]
+
+        return_data.index = return_data.index.astype(str)
+
+    print(return_data.head())
+
+    results = pd.DataFrame()
+
+    for stock in return_data.columns:
+        experiment_name = stock+"-arima-forecasting"
+        mlflow.set_experiment(experiment_name)
+        with mlflow.start_run():
+            mlflow.autolog()
+
+            input_data = return_data[stock].values
+            print(f"DATA : {input_data}", flush=True)
+
+            model = sm.tsa.arima.model.ARIMA(input_data, order=(1,0,0))
+            model_fit = model.fit()
+            print(model_fit.summary(), flush=True)
+
+            n_periods = 5
+            forecast = model_fit.get_forecast(steps=n_periods)
+
+            ci = forecast.conf_int()
+            avg_bounds = ci.mean(axis=1)
+            results[stock] = avg_bounds
+
+    print(results.head(), flush=True)
 
     response = json.dumps({'number': number, 'squared': result, 
                             'predictions': y_pred.tolist(), 
                            'dataframe': df.to_dict(orient='records'),
-                           'yahoo_pull': yahoo_pull.to_dict(orient='records'),
-                           'forecast': avg_series.to_dict()})
+                           'yahoo_pull': return_data.to_dict(),
+                           'forecast': results.to_dict()})
     
     # Publish result back to reply_to queue
     ch.basic_publish(
