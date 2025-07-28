@@ -84,7 +84,7 @@ def callback(ch, method, properties, body):
     return_data = pd.DataFrame()
 
     if yahoo_pull.empty:
-        return_data['DMMY'] = np.zeros(20)  # Default to zeroes if no data
+        return_data['NULL'] = np.zeros(20)  # Default to zeroes if no data
 
     else:
         for stock in stocks:
