@@ -18,14 +18,14 @@ def connect_rabbitmq():
             time.sleep(2)
     return None
 
-@app.route('/square', methods=['POST'])
-def square():
+@app.route('/predict', methods=['POST'])
+def predict():
     data = request.get_json()
-    number = data['number']
+    stock = data['stock']
 
     connection = connect_rabbitmq()
     channel = connection.channel()
-    channel.queue_declare(queue='square')
+    channel.queue_declare(queue='stock')
 
     # Create a temporary callback queue
     result = channel.queue_declare(queue='', exclusive=True)
@@ -47,22 +47,23 @@ def square():
     # Publish request with reply_to and correlation_id
     channel.basic_publish(
         exchange='',
-        routing_key='square',
+        routing_key='stock',
         properties=pika.BasicProperties(
             reply_to=callback_queue,
             correlation_id=corr_id
         ),
-        body=json.dumps({'number': number})
+        body=json.dumps({'stock': stock})
     )
 
     # Wait for response (poll-based)
     while response is None:
         connection.process_data_events()
-
-    print(f"Processed: {number} -> {response['squared']}", flush=True)
-    print(f"Iris Data : {response['predictions']}", flush=True)
-    print(f"DataFrame : {response['dataframe']}", flush=True)
+        
+    print(f"Stock Histories : {response['stock_history']}", flush=True)
     print(f"Forecast : {response['forecast']}", flush=True)
+
+    print(f"{type(response['forecast'])}", flush=True)
+
 
     return jsonify(response)
 

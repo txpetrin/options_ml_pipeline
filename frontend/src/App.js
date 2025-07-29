@@ -1,86 +1,155 @@
 import React, { useState } from 'react';
 
 function App() {
-  const [number, setNumber] = useState('');
+  const [stock, setStock] = useState('');
   const [result, setResult] = useState(null);
-  const [irisData, setIrisData] = useState(null);
-  const [irisDf, setIrisDf] = useState(null); 
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleSubmit = async () => {
-    const res = await fetch('http://localhost:4000/square', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ number: parseInt(number) }),
-    });
+    if (!stock.trim()) {
+      setError('Please enter a stock symbol');
+      return;
+    }
 
-    const data = await res.json();
+    setLoading(true);
+    setError(null);
 
-    console.log('Received predictions:', data.predictions);
-    console.log('Type of predictions:', typeof data.predictions);
-    console.log('Received DataFrame:', data.dataframe);
-    console.log('Type of dataframe:', typeof data.dataframe);
+    try {
+      const res = await fetch('http://localhost:4000/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stock: stock.trim().toUpperCase() }),
+      });
 
-    setResult(data.squared);
-    setIrisData(data.predictions);
-    setIrisDf(data.dataframe);
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+
+      const data = await res.json();
+      setResult(data);
+    } catch (err) {
+      setError(err.message || 'An error occurred');
+      setResult(null);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const renderTable = () => {
-    if (!irisDf || !Array.isArray(irisDf) || irisDf.length === 0) return null;
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleSubmit();
+    }
+  };
 
-    const columns = Object.keys(irisDf[0]);
+  const renderDataFrame = (data, title) => {
+    if (!Array.isArray(data) || data.length === 0) return null;
+
+    const columns = Object.keys(data[0]);
 
     return (
-      <table border="1" cellPadding="5" style={{ marginTop: '20px', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            {columns.map((col) => (
-              <th key={col}>{col}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {irisDf.map((row, idx) => (
-            <tr key={idx}>
-              {columns.map((col) => (
-                <td key={col}>{row[col]}</td>
+      <div style={{ marginTop: '20px' }}>
+        <h3>{title}</h3>
+        <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%', border: '1px solid #ddd' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#f5f5f5' }}>
+                {columns.map((col) => (
+                  <th key={col} style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'left' }}>
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((row, idx) => (
+                <tr key={idx}>
+                  {columns.map((col) => (
+                    <td key={col} style={{ border: '1px solid #ddd', padding: '8px' }}>
+                      {typeof row[col] === 'number' ? row[col].toFixed(2) : row[col]}
+                    </td>
+                  ))}
+                </tr>
               ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+            </tbody>
+          </table>
+        </div>
+      </div>
     );
   };
 
   return (
-    <div style={{ padding: '50px' }}>
-      <h2>Square a Number</h2>
-      <input
-        type="number"
-        value={number}
-        onChange={(e) => setNumber(e.target.value)}
-        placeholder="Enter a number"
-      />
-      <button onClick={handleSubmit}>Square</button>
+    <div style={{ padding: '50px', maxWidth: '1000px', margin: '0 auto' }}>
+      <h2>Stock Prediction</h2>
 
-      {result !== null && (
-        <div>
-          <p>Result: {result}</p>
+      <div style={{ marginBottom: '20px' }}>
+        <input
+          type="text"
+          value={stock}
+          onChange={(e) => setStock(e.target.value)}
+          onKeyPress={handleKeyPress}
+          placeholder="Enter stock symbol (e.g., AAPL, GOOGL)"
+          style={{
+            padding: '10px',
+            fontSize: '16px',
+            border: '1px solid #ddd',
+            borderRadius: '4px',
+            marginRight: '10px',
+            width: '250px',
+          }}
+          disabled={loading}
+        />
+
+        <button
+          onClick={handleSubmit}
+          disabled={loading || !stock.trim()}
+          style={{
+            padding: '10px 20px',
+            fontSize: '16px',
+            backgroundColor: loading ? '#ccc' : '#007bff',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: loading ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {loading ? 'Processing...' : 'Predict'}
+        </button>
+      </div>
+
+      {error && (
+        <div
+          style={{
+            color: 'red',
+            backgroundColor: '#ffe6e6',
+            padding: '10px',
+            borderRadius: '4px',
+            marginBottom: '20px',
+          }}
+        >
+          Error: {error}
         </div>
       )}
 
-      {irisData && Array.isArray(irisData) && (
-        <div>
-          <h3>Iris Predictions</h3>
-          <ul>
-            {irisData.map((val, idx) => (
-              <li key={idx}>Sample {idx + 1}: Class {val}</li>
-            ))}
-          </ul>
+      {loading && (
+        <div
+          style={{
+            color: '#666',
+            fontStyle: 'italic',
+            marginBottom: '20px',
+          }}
+        >
+          Processing your request... This may take a moment.
         </div>
       )}
 
-      {renderTable()}
+      {result && (
+        <div>
+          <h3 style={{ color: '#28a745' }}>Results for {stock.toUpperCase()}</h3>
+          {renderDataFrame(result.forecast, 'Forecast')}
+          {renderDataFrame(result.stock_history, 'Stock History')}
+        </div>
+      )}
     </div>
   );
 }

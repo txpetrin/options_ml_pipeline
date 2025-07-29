@@ -18,7 +18,7 @@ for _ in range(20):
     try:
         connection = pika.BlockingConnection(pika.ConnectionParameters('rabbitmq'))
         channel = connection.channel()
-        channel.queue_declare(queue='square')
+        channel.queue_declare(queue='stock')
         break
     except pika.exceptions.AMQPConnectionError:
         time.sleep(3)
@@ -26,54 +26,11 @@ for _ in range(20):
 # Message handler
 def callback(ch, method, properties, body):
     message = json.loads(body)
-    number = message['number']
-    result = number * number
-
-    ### TEST HERE TO SEE IF CONNECTION IS WORKING ###
-    print(f"Processed: {number} -> {result}", flush=True)
-
+    stock_read = message['stock']
 
     ### TEST HERE TO SEE IF MLFLOW IS WORKING ###
     # set the MLflow tracking URI
     mlflow.set_tracking_uri("http://mlflow:5000")
-
-    # create an MLflow experiment
-    experiment_name = "iris-classification"
-    mlflow.set_experiment(experiment_name)
-
-
-    with mlflow.start_run():
-        mlflow.sklearn.autolog()
-        # load the iris dataset
-        db = load_iris()
-        X_train, X_test, y_train, y_test = train_test_split(db.data, db.target, test_size=0.2, random_state=42)
-
-        # create and train a random forest classifier
-        rf = RandomForestClassifier(n_estimators=100, random_state=42)
-        rf.fit(X_train, y_train)
-
-        print("HIT MODEL FIT", flush=True)
-
-        # predict on the test set
-        y_pred = rf.predict(X_test)
-
-        df = pd.DataFrame(X_test, columns=db.feature_names)
-        df['iris_actual'] = y_test
-        df['iris_predictions'] = y_pred
-
-
-        print(f"HIT PREDICT", flush=True)
-        print(f"Prediction: {y_pred}", flush=True)
-
-
-
-
-
-    # NOTE : SEE IF RUN NEEDS TO BE ENDED HERE
-
-
-    # TODO : Separate the independent models for building process
-    # TODO : Import yfinance data and set up ARIMA model
 
     stocks = ["AAPL", "NVDA"]
     yahoo_pull = yf.download(stocks, start="2025-01-01", end="2025-02-01")
@@ -118,11 +75,8 @@ def callback(ch, method, properties, body):
 
     print(results.head(), flush=True)
 
-    response = json.dumps({'number': number, 'squared': result, 
-                            'predictions': y_pred.tolist(), 
-                           'dataframe': df.to_dict(orient='records'),
-                           'yahoo_pull': return_data.to_dict(),
-                           'forecast': results.to_dict()})
+    response = json.dumps({'stock_history': return_data.to_dict(orient='records'),
+                           'forecast': results.to_dict(orient='records')})
     
     # Publish result back to reply_to queue
     ch.basic_publish(
@@ -133,5 +87,5 @@ def callback(ch, method, properties, body):
     )
 
 # Start consuming
-channel.basic_consume(queue='square', on_message_callback=callback, auto_ack=True)
+channel.basic_consume(queue='stock', on_message_callback=callback, auto_ack=True)
 channel.start_consuming()
