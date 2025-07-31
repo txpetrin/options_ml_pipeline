@@ -16,12 +16,16 @@ services:
     build: ./worker
     depends_on:
       - rabbitmq
+    # TP : Not my favorite way to do this but saves user from hassle when creating .env
+    #      Only have to worry about the POLYGON API Key
     environment:
       AWS_ACCESS_KEY_ID: "mlflow"
       AWS_SECRET_ACCESS_KEY: "mlflowpass"
       MLFLOW_TRACKING_URI: "http://mlflow:5000"
       MLFLOW_S3_ENDPOINT_URL: "http://minio:9000"
       MLFLOW_S3_IGNORE_TLS: "true"
+    env_file:
+      - ./worker/.env
 
   frontend:
     build: ./frontend

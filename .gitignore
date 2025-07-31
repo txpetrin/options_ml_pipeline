@@ -1,2 +1,2 @@
 Testpad.ipynb
-.env*
+./worker/.env

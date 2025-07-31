@@ -3,15 +3,16 @@ import json
 import time
 import mlflow
 import pandas as pd
-import yfinance as yf
 import numpy as np
-# import pmdarima as pm
 import statsmodels as sm
+from polygon import RESTClient
+import os
+from datetime import datetime
 
-### TEST HERE TO SEE IF MLFLOW IS WORKING ###
-from sklearn.datasets import load_iris
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
+
+print(f"{os.getenv('POLYGON_KEY')}", flush=True)
+client = RESTClient(api_key=os.getenv("POLYGON_KEY"))
+
 
 # Retry connection
 for _ in range(20):
@@ -28,28 +29,23 @@ def callback(ch, method, properties, body):
     message = json.loads(body)
     stock_read = message['stock']
 
-    ### TEST HERE TO SEE IF MLFLOW IS WORKING ###
     # set the MLflow tracking URI
     mlflow.set_tracking_uri("http://mlflow:5000")
 
-    stocks = ["AAPL", "NVDA"]
-    yahoo_pull = yf.download(stocks, start="2025-01-01", end="2025-02-01")
-    print(yahoo_pull.head(), flush=True)
-    print(yahoo_pull.columns, flush=True)
-    print(yahoo_pull[('Close', "AAPL")], flush=True)
+    tickers = ["AAPL", "LEVI"]
 
     return_data = pd.DataFrame()
 
-    if yahoo_pull.empty:
-        return_data['NULL'] = np.zeros(20)  # Default to zeroes if no data
+    # List Aggregates (Bars)
+    for ticker in tickers:
+        dates = []
+        aggs = []
+        for a in client.list_aggs(ticker=ticker, multiplier=1, timespan="day", from_="2025-01-01", to="2025-02-14", limit=400):
+            dates.append(datetime.fromtimestamp(a.timestamp / 1000).date())
+            aggs.append(a.close)
 
-    else:
-        for stock in stocks:
-            return_data[stock] = yahoo_pull['Close'][stock]
-
-        return_data.index = return_data.index.astype(str)
-
-    print(return_data.head())
+        return_data[ticker] = aggs
+        return_data.index = dates
 
     results = pd.DataFrame()
 
