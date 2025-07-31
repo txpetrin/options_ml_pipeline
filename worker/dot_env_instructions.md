@@ -1,3 +1,4 @@
+# .env Instructions:
 Keep the .env file in this filepath under the name '.env'. There shall be a single line in the file using a polygion.io key.
 
 ## Rationale behind this: 
